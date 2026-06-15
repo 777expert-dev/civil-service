@@ -568,10 +568,13 @@ async function savePortalSettings(){
   const id = (document.getElementById('ps-id')?.value||'').trim();
   const pw = (document.getElementById('ps-pw')?.value||'').trim();
   if(!id||!pw){ toast('아이디와 비밀번호를 입력하세요','warn'); return; }
-  portalId = id; portalPw = pw;
+  portalId = id;
+  portalPw = pw;
   if(csDB){
-    await csDB.from('settings').upsert({key:'portal_id', value:id});
-    await csDB.from('settings').upsert({key:'portal_pw', value:pw});
+    try {
+      await csDB.from('settings').upsert({key:'portal_id', value:id});
+      await csDB.from('settings').upsert({key:'portal_pw', value:pw});
+    } catch(e){ console.error('포털 계정 DB 저장 실패:', e); }
   }
   closeModal();
   toast('✅ 포털 계정 저장 완료');
