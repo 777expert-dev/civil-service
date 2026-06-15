@@ -377,7 +377,13 @@ function handleCardClick(id){
   const c = cards.find(x=>x.id===id);
   if(!c) return;
   if(!c.link || c.link==='#'){ showLinkHint(id); return; }
-  if(c.requiresLogin){ openCardLogin(id); return; }
+  if(c.requiresLogin){
+    if(!portalId||!portalPw){
+      toast('포털 계정이 아직 설정되지 않았습니다. 관리자에게 문의하세요.','warn');
+      return;
+    }
+    openCardLogin(id); return;
+  }
   window.open(c.link,'_blank','noopener');
 }
 
@@ -642,7 +648,7 @@ async function savePortalSettings(){
     await csDB.from('settings').upsert({key:'portal_pw', value:pw});
   }
   closeModal();
-  toast('✅ 포털 계정 저장 완료');
+  toast('✅ 포털 계정 저장 완료 (ID: '+id+')');
 }
 
 function openCategoryManager(){
