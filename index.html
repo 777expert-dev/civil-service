@@ -548,36 +548,38 @@ function saveCard(){
 
 function openPortalSettings(){
   showModal('🔑 포털 접근 계정 설정',
-    `<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:#92400E">
-       🔒 카드에 "로그인 필요" 설정 시, 이 계정으로 인증합니다.
-     </div>
-     <div class="form-row">
-       <label>포털 아이디</label>
-       <input id="ps-id" value="${escA(portalId)}" placeholder="예: staff">
-     </div>
-     <div class="form-row">
-       <label>포털 비밀번호</label>
-       <input type="password" id="ps-pw" value="${escA(portalPw)}" placeholder="비밀번호 입력">
-     </div>`,
-    `<button class="btn btn-g" onclick="closeModal()">취소</button>
-     <button class="btn btn-p" onclick="savePortalSettings()">저장</button>`
+    '<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:#92400E">'
+    + '🔒 카드에 "로그인 필요" 설정 시, 이 계정으로 인증합니다.'
+    + '</div>'
+    + '<div class="form-row"><label>포털 아이디</label>'
+    + '<input id="ps-id" value="' + escA(portalId) + '" placeholder="예: staff"></div>'
+    + '<div class="form-row"><label>포털 비밀번호</label>'
+    + '<input type="password" id="ps-pw" value="' + escA(portalPw) + '" placeholder="비밀번호 입력"></div>',
+    '<button id="_psCancelBtn" class="btn btn-g">취소</button>'
+    + '<button id="_psSaveBtn" class="btn btn-p">저장</button>'
   );
+  setTimeout(function(){
+    var cb = document.getElementById('_psCancelBtn');
+    var sb = document.getElementById('_psSaveBtn');
+    if(cb) cb.addEventListener('click', closeModal);
+    if(sb) sb.addEventListener('click', savePortalSettings);
+    var inp = document.getElementById('ps-id');
+    if(inp) inp.focus();
+  }, 50);
 }
 
-async function savePortalSettings(){
-  const id = (document.getElementById('ps-id')?.value||'').trim();
-  const pw = (document.getElementById('ps-pw')?.value||'').trim();
+function savePortalSettings(){
+  var id = (document.getElementById('ps-id')?.value||'').trim();
+  var pw = (document.getElementById('ps-pw')?.value||'').trim();
   if(!id||!pw){ toast('아이디와 비밀번호를 입력하세요','warn'); return; }
   portalId = id;
   portalPw = pw;
-  if(csDB){
-    try {
-      await csDB.from('settings').upsert({key:'portal_id', value:id});
-      await csDB.from('settings').upsert({key:'portal_pw', value:pw});
-    } catch(e){ console.error('포털 계정 DB 저장 실패:', e); }
-  }
   closeModal();
   toast('✅ 포털 계정 저장 완료');
+  if(csDB){
+    csDB.from('settings').upsert({key:'portal_id', value:id}).catch(function(e){ console.error('DB 저장 실패:', e); });
+    csDB.from('settings').upsert({key:'portal_pw', value:pw}).catch(function(e){ console.error('DB 저장 실패:', e); });
+  }
 }
 
 function openCategoryManager(){
