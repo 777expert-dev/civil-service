@@ -42,6 +42,10 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:#F0F4F8;m
 .card-title{font-size:15.5px;font-weight:800;color:#1E293B;margin-bottom:6px;line-height:1.3}
 .card-desc{font-size:12.5px;color:#64748B;line-height:1.6;flex:1}
 .card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:12px;border-top:1px solid #F1F5F9}
+
+.card-lock{position:absolute;top:10px;right:10px;font-size:15px;opacity:.7}
+.card{position:relative;cursor:pointer;}
+
 .card-link-label{font-size:12px;font-weight:700;color:#2E74B5;display:flex;align-items:center;gap:4px}
 .card-arrow{font-size:14px;color:#2E74B5}
 .card-new{position:absolute;top:14px;right:14px;background:#EF4444;color:#fff;font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:10px}
@@ -126,7 +130,6 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:#F0F4F8;m
   .card-grid{grid-template-columns:1fr 1fr}
 }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
 
@@ -172,6 +175,7 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:#F0F4F8;m
       <button class="btn-add" onclick="openCardForm()">➕ 카드 추가</button>
       <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3)" onclick="openCategoryManager()">🏷️ 카테고리</button>
       <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3)" onclick="openNoticeEdit()">📢 공지 수정</button>
+      <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3)" onclick="openPortalSettings()">🔑 포털 계정</button>
       <button class="btn-exit" onclick="exitAdmin()">나가기</button>
     </div>
   </div>
@@ -204,18 +208,18 @@ const COLORS = [
 ];
 
 const DEFAULT_CARDS = [
-  {id:'c1',icon:'📄',title:'재직증명서 발급',desc:'재직 사실 확인을 위한 증명서를 신청합니다.',category:'증명서',color:0,link:'#',isNew:false},
-  {id:'c2',icon:'📋',title:'경력증명서 발급',desc:'근무 기간 및 경력을 증명하는 서류를 신청합니다.',category:'증명서',color:0,link:'#',isNew:false},
-  {id:'c3',icon:'💰',title:'급여명세서 조회',desc:'월별 급여 내역 및 세금 공제 현황을 확인합니다.',category:'급여',color:1,link:'#',isNew:false},
-  {id:'c4',icon:'🏖️',title:'휴가 신청',desc:'연차, 반차, 특별휴가 등 각종 휴가를 신청합니다.',category:'휴가',color:5,link:'#',isNew:false},
-  {id:'c5',icon:'📅',title:'연차 잔여 조회',desc:'잔여 연차 및 사용 내역을 확인합니다.',category:'휴가',color:5,link:'#',isNew:false},
-  {id:'c6',icon:'🎓',title:'교육 신청',desc:'직무 교육, 법정 의무 교육 등 사내외 교육을 신청합니다.',category:'교육',color:3,link:'#',isNew:true},
-  {id:'c7',icon:'🎁',title:'복리후생 신청',desc:'식비, 교통비, 경조사비 등 복리후생을 신청합니다.',category:'복리후생',color:2,link:'#',isNew:false},
-  {id:'c8',icon:'🏥',title:'건강검진 신청',desc:'연간 건강검진 일정 예약 및 신청을 진행합니다.',category:'복리후생',color:4,link:'#',isNew:false},
-  {id:'c9',icon:'🏠',title:'사내 시설 예약',desc:'회의실, 세미나실, 공용 공간 예약을 신청합니다.',category:'시설',color:7,link:'#',isNew:false},
-  {id:'c10',icon:'🚗',title:'업무용 차량 예약',desc:'업무용 차량 및 주차 스티커 발급을 신청합니다.',category:'시설',color:7,link:'#',isNew:false},
-  {id:'c11',icon:'📝',title:'인사 서류 제출',desc:'각종 인사 관련 서류를 제출하고 접수 현황을 확인합니다.',category:'인사',color:6,link:'#',isNew:false},
-  {id:'c12',icon:'🔔',title:'업무 환경 민원',desc:'근무 환경 개선 요청 및 시설 불편 사항을 접수합니다.',category:'민원',color:4,link:'#',isNew:false},
+  {id:'c1',icon:'📄',title:'재직증명서 발급',desc:'재직 사실 확인을 위한 증명서를 신청합니다.',category:'증명서',color:0,link:'#',isNew:false,requiresLogin:false},
+  {id:'c2',icon:'📋',title:'경력증명서 발급',desc:'근무 기간 및 경력을 증명하는 서류를 신청합니다.',category:'증명서',color:0,link:'#',isNew:false,requiresLogin:false},
+  {id:'c3',icon:'💰',title:'급여명세서 조회',desc:'월별 급여 내역 및 세금 공제 현황을 확인합니다.',category:'급여',color:1,link:'#',isNew:false,requiresLogin:false},
+  {id:'c4',icon:'🏖️',title:'휴가 신청',desc:'연차, 반차, 특별휴가 등 각종 휴가를 신청합니다.',category:'휴가',color:5,link:'#',isNew:false,requiresLogin:false},
+  {id:'c5',icon:'📅',title:'연차 잔여 조회',desc:'잔여 연차 및 사용 내역을 확인합니다.',category:'휴가',color:5,link:'#',isNew:false,requiresLogin:false},
+  {id:'c6',icon:'🎓',title:'교육 신청',desc:'직무 교육, 법정 의무 교육 등 사내외 교육을 신청합니다.',category:'교육',color:3,link:'#',isNew:true,requiresLogin:false},
+  {id:'c7',icon:'🎁',title:'복리후생 신청',desc:'식비, 교통비, 경조사비 등 복리후생을 신청합니다.',category:'복리후생',color:2,link:'#',isNew:false,requiresLogin:false},
+  {id:'c8',icon:'🏥',title:'건강검진 신청',desc:'연간 건강검진 일정 예약 및 신청을 진행합니다.',category:'복리후생',color:4,link:'#',isNew:false,requiresLogin:false},
+  {id:'c9',icon:'🏠',title:'사내 시설 예약',desc:'회의실, 세미나실, 공용 공간 예약을 신청합니다.',category:'시설',color:7,link:'#',isNew:false,requiresLogin:false},
+  {id:'c10',icon:'🚗',title:'업무용 차량 예약',desc:'업무용 차량 및 주차 스티커 발급을 신청합니다.',category:'시설',color:7,link:'#',isNew:false,requiresLogin:false},
+  {id:'c11',icon:'📝',title:'인사 서류 제출',desc:'각종 인사 관련 서류를 제출하고 접수 현황을 확인합니다.',category:'인사',color:6,link:'#',isNew:false,requiresLogin:false},
+  {id:'c12',icon:'🔔',title:'업무 환경 민원',desc:'근무 환경 개선 요청 및 시설 불편 사항을 접수합니다.',category:'민원',color:4,link:'#',isNew:false,requiresLogin:false},
 ];
 
 let cards = [];
@@ -225,66 +229,25 @@ let editingId = null;
 let activeFilter = 'all';
 const ADMIN_ID = 'admin';
 const ADMIN_PW = '1234';
-// ── Supabase 초기화 (civil_service 스키마) ───────────────────
-const _SB_URL = 'https://dhvesnfohfinohtwvaqz.supabase.co';
-const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRodmVzbmZvaGZpbm9odHd2YXF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NDg2MzUsImV4cCI6MjA5NTUyNDYzNX0.Cof6JVNw05suj19UVEkqksFL9gb4ZltzYVg_8E9UUqc';
-const _sbClient = window.supabase ? window.supabase.createClient(_SB_URL, _SB_KEY) : null;
-const csDB = _sbClient ? _sbClient.schema('civil_service') : null;
-// ─────────────────────────────────────────────────────────────
-
 let noticeText = '';
 
-async function save(){
-  if(!csDB){ // localStorage 폴백
-    localStorage.setItem('cs_cards', JSON.stringify(cards));
-    localStorage.setItem('cs_notice', noticeText);
-    localStorage.setItem('cs_categories', JSON.stringify(categories));
-    return;
-  }
-  try{
-    const rows = cards.map((c,i)=>({
-      id: c.id, icon: c.icon, title: c.title,
-      description: c.desc||'', category: c.category,
-      color_index: c.color??0, link_url: c.link||'#',
-      is_new: c.isNew||false, sort_order: i
-    }));
-    const {error:uErr} = await csDB.from('service_cards').upsert(rows);
-    if(uErr) throw uErr;
-    const {error:nErr} = await csDB.from('settings').upsert({key:'notice', value:noticeText});
-    if(nErr) throw nErr;
-  } catch(e){ console.error('저장 실패:', e); toast('저장 실패: '+(e.message||e),'err'); }
+function save(){
+  localStorage.setItem('cs_cards', JSON.stringify(cards));
+  localStorage.setItem('cs_notice', noticeText);
+  localStorage.setItem('cs_categories', JSON.stringify(categories));
 }
-async function load(){
-  if(!csDB){ // localStorage 폴백
-    try{
-      const c = localStorage.getItem('cs_cards');
-      const n = localStorage.getItem('cs_notice');
-      if(c) cards = JSON.parse(c);
-      else cards = JSON.parse(JSON.stringify(DEFAULT_CARDS));
-      if(n !== null) noticeText = n; else noticeText = '';
-      const cat = localStorage.getItem('cs_categories');
-      if(cat) categories = JSON.parse(cat);
-      else categories = [...new Set(JSON.parse(JSON.stringify(DEFAULT_CARDS)).map(c=>c.category))];
-    } catch(e){ cards = JSON.parse(JSON.stringify(DEFAULT_CARDS)); categories=[...new Set(DEFAULT_CARDS.map(c=>c.category))]; }
-    return;
-  }
+function load(){
   try{
-    const {data:cardData, error:cErr} = await csDB.from('service_cards').select('*').order('sort_order',{ascending:true});
-    if(cErr) throw cErr;
-    if(cardData && cardData.length>0){
-      cards = cardData.map(r=>({id:r.id, icon:r.icon, title:r.title, desc:r.description,
-        category:r.category, color:r.color_index, link:r.link_url, isNew:r.is_new}));
-    } else {
-      cards = JSON.parse(JSON.stringify(DEFAULT_CARDS));
-    }
-    categories = [...new Set(cards.map(c=>c.category))];
-    const {data:nd} = await csDB.from('settings').select('value').eq('key','notice').maybeSingle();
-    noticeText = nd?.value || '';
-  } catch(e){
-    console.error('불러오기 실패:', e);
-    cards = JSON.parse(JSON.stringify(DEFAULT_CARDS));
-    categories = [...new Set(DEFAULT_CARDS.map(c=>c.category))];
-  }
+    const c = localStorage.getItem('cs_cards');
+    const n = localStorage.getItem('cs_notice');
+    if(c) cards = JSON.parse(c);
+    else cards = JSON.parse(JSON.stringify(DEFAULT_CARDS));
+    if(n !== null) noticeText = n;
+    else noticeText = '';
+    const cat = localStorage.getItem('cs_categories');
+    if(cat) categories = JSON.parse(cat);
+    else categories = [...new Set(JSON.parse(JSON.stringify(DEFAULT_CARDS)).map(c=>c.category))];
+  } catch(e){ cards = JSON.parse(JSON.stringify(DEFAULT_CARDS)); categories=[...new Set(DEFAULT_CARDS.map(c=>c.category))]; }
 }
 
 // ── RENDER ────────────────────────────────────────────────────
@@ -323,17 +286,65 @@ function renderCards(){
 
   grid.innerHTML = filtered.map(c=>{
     const col = COLORS[c.color||0];
-    return `<a class="card" href="${c.link&&c.link!=='#'?c.link:'javascript:void(0)'}" ${c.link&&c.link!=='#'?'target="_blank" rel="noopener"':''} onclick="${!c.link||c.link==='#'?`event.preventDefault();showLinkHint('${c.id}')`:''}" title="${escH(c.title)}">
+    const locked = c.requiresLogin && c.link && c.link !== '#';
+    return `<div class="card" onclick="handleCardClick('${c.id}')" title="${escH(c.title)}">
+      ${locked?'<div class="card-lock">🔒</div>':''}
       ${c.isNew?'<div class="card-new">NEW</div>':''}
       <div class="card-badge" style="background:${col.bg};color:${col.text}">${c.category}</div>
       <div class="card-icon">${c.icon}</div>
       <div class="card-title">${escH(c.title)}</div>
       <div class="card-desc">${escH(c.desc||'')}</div>
       <div class="card-footer">
-        <span class="card-link-label">바로가기 <span class="card-arrow">→</span></span>
+        <span class="card-link-label">${locked?'🔒 로그인 후 이동':'바로가기'} <span class="card-arrow">→</span></span>
       </div>
-    </a>`;
+    </div>`;
   }).join('');
+}
+
+
+function handleCardClick(id){
+  const c = cards.find(x=>x.id===id);
+  if(!c) return;
+  if(!c.link || c.link==='#'){ showLinkHint(id); return; }
+  if(c.requiresLogin){ openCardLogin(id); return; }
+  window.open(c.link,'_blank','noopener');
+}
+
+function openCardLogin(id){
+  const c = cards.find(x=>x.id===id);
+  if(!c) return;
+  showModal('🔒 로그인이 필요합니다',
+    `<div style="text-align:center;margin-bottom:18px">
+       <div style="font-size:36px;margin-bottom:6px">🔒</div>
+       <div style="font-size:13.5px;color:#475569">"<strong>${escH(c.title)}</strong>" 접근을 위해<br>로그인이 필요합니다.</div>
+     </div>
+     <div class="form-row">
+       <label>아이디</label>
+       <input id="portal-id-input" placeholder="아이디 입력" autocomplete="off">
+     </div>
+     <div class="form-row">
+       <label>비밀번호</label>
+       <input type="password" id="portal-pw-input" placeholder="비밀번호 입력"
+              onkeydown="if(event.key==='Enter')verifyCardLogin('${c.id}')">
+     </div>`,
+    `<button class="btn btn-g" onclick="closeModal()">취소</button>
+     <button class="btn btn-p" onclick="verifyCardLogin('${c.id}')">확인</button>`
+  );
+  setTimeout(()=>document.getElementById('portal-id-input')?.focus(),120);
+}
+
+function verifyCardLogin(id){
+  const c = cards.find(x=>x.id===id);
+  if(!c) return;
+  const inputId = (document.getElementById('portal-id-input')?.value||'').trim();
+  const inputPw = (document.getElementById('portal-pw-input')?.value||'').trim();
+  if(inputId===portalId && inputPw===portalPw){
+    closeModal();
+    window.open(c.link,'_blank','noopener');
+  } else {
+    toast('아이디 또는 비밀번호가 일치하지 않습니다.','err');
+    document.getElementById('portal-pw-input')?.select();
+  }
 }
 
 function showLinkHint(id){
@@ -371,6 +382,7 @@ function openAdminLogin(){
      <div class="form-row">
        <label>비밀번호</label>
        <input type="password" id="pw-input" placeholder="비밀번호 입력" autocomplete="current-password" onkeydown="if(event.key==='Enter')checkPw()">
+       <div class="pw-hint">초기 아이디: admin · 초기 비밀번호: 1234</div>
      </div>`,
     `<button class="btn btn-g" onclick="closeModal()">취소</button>
      <button class="btn btn-p" onclick="checkPw()">로그인</button>`);
@@ -420,7 +432,7 @@ function renderAdminList(){
       <div class="admin-item-icon">${c.icon}</div>
       <div class="admin-item-info">
         <div class="admin-item-title">${escH(c.title)} ${c.isNew?'<span style="background:#EF4444;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;vertical-align:middle">NEW</span>':''}</div>
-        <div class="admin-item-meta"><span style="background:${col.bg};color:${col.text};padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700">${c.category}</span>  ${c.link&&c.link!=='#'?'🔗 링크 있음':'⚠️ 링크 없음'}</div>
+        <div class="admin-item-meta"><span style="background:${col.bg};color:${col.text};padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700">${c.category}</span>  ${c.link&&c.link!=='#'?'🔗 링크 있음':'⚠️ 링크 없음'}${c.requiresLogin?' 🔒 로그인 필요':''}</div>
       </div>
       <div class="admin-item-actions">
         <button class="btn btn-g btn-sm" onclick="openCardForm('${c.id}')">✏️ 수정</button>
@@ -479,7 +491,12 @@ function openCardForm(id){
        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
          <input type="checkbox" id="f-new" ${c?.isNew?'checked':''}> NEW 배지 표시
        </label>
-     </div>`,
+     </div>
+     <div class="form-row">
+       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
+         <input type="checkbox" id="f-require-login" ${c?.requiresLogin?'checked':''}> 🔒 링크 접근 시 로그인 필요
+       </label>
+     </div>\``,
     `<button class="btn btn-g" onclick="closeModal()">취소</button>
      ${id?`<button class="btn btn-r" onclick="deleteCard('${id}');closeModal()">삭제</button>`:''}
      <button class="btn btn-p" onclick="saveCard()">${id?'저장':'추가'}</button>`
@@ -507,15 +524,16 @@ function saveCard(){
   const cat   = (document.getElementById('f-cat')?.value||'').trim();
   const link  = (document.getElementById('f-link')?.value||'').trim();
   const isNew = document.getElementById('f-new')?.checked||false;
+  const requiresLogin = document.getElementById('f-require-login')?.checked||false;
   if(!title){toast('서비스명을 입력하세요','warn');return;}
   if(!cat){toast('카테고리를 입력하세요','warn');return;}
 
   if(editingId){
     const c = cards.find(x=>x.id===editingId);
-    if(c){ c.icon=_selIcon; c.title=title; c.desc=desc; c.category=cat; c.link=link||'#'; c.isNew=isNew; c.color=_selColor; }
+    if(c){ c.icon=_selIcon; c.title=title; c.desc=desc; c.category=cat; c.link=link||'#'; c.isNew=isNew; c.color=_selColor; c.requiresLogin=requiresLogin; }
     toast('✅ 카드 수정 완료');
   } else {
-    cards.push({id:'c'+Date.now(),icon:_selIcon,title,desc,category:cat,link:link||'#',isNew,color:_selColor});
+    cards.push({id:'c'+Date.now(),icon:_selIcon,title,desc,category:cat,link:link||'#',isNew,color:_selColor,requiresLogin});
     toast('✅ 카드 추가 완료');
   }
   save();
@@ -524,6 +542,38 @@ function saveCard(){
 }
 
 // ── CATEGORY MANAGER ─────────────────────────────────────────
+
+function openPortalSettings(){
+  showModal('🔑 포털 접근 계정 설정',
+    `<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:#92400E">
+       🔒 카드에 "로그인 필요" 설정 시, 이 계정으로 인증합니다.
+     </div>
+     <div class="form-row">
+       <label>포털 아이디</label>
+       <input id="ps-id" value="${escA(portalId)}" placeholder="예: staff">
+     </div>
+     <div class="form-row">
+       <label>포털 비밀번호</label>
+       <input type="password" id="ps-pw" value="${escA(portalPw)}" placeholder="비밀번호 입력">
+     </div>`,
+    `<button class="btn btn-g" onclick="closeModal()">취소</button>
+     <button class="btn btn-p" onclick="savePortalSettings()">저장</button>`
+  );
+}
+
+async function savePortalSettings(){
+  const id = (document.getElementById('ps-id')?.value||'').trim();
+  const pw = (document.getElementById('ps-pw')?.value||'').trim();
+  if(!id||!pw){ toast('아이디와 비밀번호를 입력하세요','warn'); return; }
+  portalId = id; portalPw = pw;
+  if(csDB){
+    await csDB.from('settings').upsert({key:'portal_id', value:id});
+    await csDB.from('settings').upsert({key:'portal_pw', value:pw});
+  }
+  closeModal();
+  toast('✅ 포털 계정 저장 완료');
+}
+
 function openCategoryManager(){
   _renderCategoryModal();
 }
@@ -638,13 +688,10 @@ function deleteCategory(cat){
   openCategoryManager();
 }
 
-async function deleteCard(id){
+function deleteCard(id){
   if(!confirm('이 카드를 삭제할까요?'))return;
-  if(csDB){
-    const {error} = await csDB.from('service_cards').delete().eq('id', id);
-    if(error){ toast('삭제 실패: '+error.message,'err'); return; }
-  }
   cards = cards.filter(c=>c.id!==id);
+  save();
   renderAll();
   toast('삭제됨');
 }
@@ -718,11 +765,9 @@ function renderAll(){
 }
 
 // ── INIT ──────────────────────────────────────────────────────
-(async()=>{
-  await load();
-  renderNotice();
-  renderAll();
-})();
+load();
+renderNotice();
+renderAll();
 </script>
 </body>
 </html>
