@@ -130,6 +130,7 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:#F0F4F8;m
   .card-grid{grid-template-columns:1fr 1fr}
 }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
 
@@ -170,7 +171,7 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:#F0F4F8;m
 <!-- ADMIN PANEL -->
 <div class="admin-panel hidden" id="admin-panel">
   <div class="admin-bar">
-    <div class="admin-bar-title">🔧 관리자 페이지 — 카드 관리</div>
+    <div class="admin-bar-title">🔧 관리자 페이지 — 카드 관리 <span id="_dbStatus" style="font-size:11px;font-weight:400;margin-left:10px;opacity:.9"></span></div>
     <div class="admin-bar-actions">
       <button class="btn-add" onclick="openCardForm()">➕ 카드 추가</button>
       <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3)" onclick="openCategoryManager()">🏷️ 카테고리</button>
@@ -194,6 +195,17 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:#F0F4F8;m
 <div class="toast" id="toast"></div>
 
 <script>
+// ── Supabase ─────────────────────────────────────────────
+const _SB_URL = 'https://dhvesnfohfinohtwvaqz.supabase.co';
+const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRodmVzbmZvaGZpbm9odHd2YXF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NDg2MzUsImV4cCI6MjA5NTUyNDYzNX0.Cof6JVNw05suj19UVEkqksFL9gb4ZltzYVg_8E9UUqc';
+const _sbClient = (typeof window!=='undefined'&&window.supabase)
+  ? window.supabase.createClient(_SB_URL,_SB_KEY) : null;
+const csDB = _sbClient ? _sbClient.schema('civil_service') : null;
+let _dbOk = null;
+let portalId = '';
+let portalPw = '';
+// ──────────────────────────────────────────────────────────
+
 // ── DATA ──────────────────────────────────────────────────────
 const ICONS = ['📄','📋','📝','📑','🗂️','🗃️','🏖️','🎓','💼','🏥','🏦','🔖','📬','🎯','🧾','💰','🏠','🚗','📅','✅','🔔','📊','👤','👥','🏆','📌','🔧','📞','💡','🎁','🛠️','📦','🔐','🌐','📲','🖥️'];
 const COLORS = [
@@ -224,9 +236,6 @@ const DEFAULT_CARDS = [
 
 let cards = [];
 let categories = [];
-let portalId = '';
-let portalPw = '';
-
 let adminMode = false;
 let editingId = null;
 let activeFilter = 'all';
@@ -234,23 +243,82 @@ const ADMIN_ID = 'admin';
 const ADMIN_PW = '1234';
 let noticeText = '';
 
-function save(){
-  localStorage.setItem('cs_cards', JSON.stringify(cards));
-  localStorage.setItem('cs_notice', noticeText);
-  localStorage.setItem('cs_categories', JSON.stringify(categories));
+
+function updateDbStatus(){
+  const el = document.getElementById('_dbStatus');
+  if(!el) return;
+  el.textContent = (_dbOk===null) ? '' : (_dbOk ? '☁️ 클라우드 연결됨' : '⚠️ 로컬 저장만 됨');
+  el.style.color  = (_dbOk===null) ? '' : (_dbOk ? '#15803D' : '#DC2626');
 }
-function load(){
+async function save(){
+  if(!csDB){
+    localStorage.setItem('cs_cards', JSON.stringify(cards));
+    localStorage.setItem('cs_notice', noticeText);
+    return;
+  }
+  async function _upsertCards(withRL){
+    const rows = cards.map((c,i)=>{
+      const r={id:c.id,icon:c.icon,title:c.title,description:c.desc||'',
+        category:c.category,color_index:c.color??0,link_url:c.link||'#',
+        is_new:c.isNew||false,sort_order:i};
+      if(withRL) r.requires_login=c.requiresLogin||false;
+      return r;
+    });
+    return csDB.from('service_cards').upsert(rows);
+  }
   try{
-    const c = localStorage.getItem('cs_cards');
-    const n = localStorage.getItem('cs_notice');
-    if(c) cards = JSON.parse(c);
-    else cards = JSON.parse(JSON.stringify(DEFAULT_CARDS));
-    if(n !== null) noticeText = n;
-    else noticeText = '';
-    const cat = localStorage.getItem('cs_categories');
-    if(cat) categories = JSON.parse(cat);
-    else categories = [...new Set(JSON.parse(JSON.stringify(DEFAULT_CARDS)).map(c=>c.category))];
-  } catch(e){ cards = JSON.parse(JSON.stringify(DEFAULT_CARDS)); categories=[...new Set(DEFAULT_CARDS.map(c=>c.category))]; }
+    let res = await _upsertCards(true);
+    if(res.error && res.error.message && res.error.message.includes('requires_login')){
+      res = await _upsertCards(false);
+    }
+    if(res.error) throw res.error;
+    const {error:e2} = await csDB.from('settings').upsert({key:'notice',value:noticeText});
+    if(e2) throw e2;
+    _dbOk = true; updateDbStatus();
+  } catch(e){
+    _dbOk = false; updateDbStatus();
+    console.error('Supabase 저장 실패:', e);
+    localStorage.setItem('cs_cards', JSON.stringify(cards));
+    localStorage.setItem('cs_notice', noticeText);
+    alert('DB 저장 실패: ' + (e.message||JSON.stringify(e)));
+  }
+}
+async function load(){
+  if(!csDB){
+    try{
+      const c=localStorage.getItem('cs_cards');
+      const n=localStorage.getItem('cs_notice');
+      if(c) cards=JSON.parse(c); else cards=JSON.parse(JSON.stringify(DEFAULT_CARDS));
+      noticeText=(n!==null)?n:'';
+      categories=[...new Set(cards.map(c=>c.category))];
+    }catch(e){ cards=JSON.parse(JSON.stringify(DEFAULT_CARDS)); }
+    return;
+  }
+  try{
+    const {data:cd,error:ce}=await csDB.from('service_cards').select('*').order('sort_order',{ascending:true});
+    if(ce) throw ce;
+    if(cd&&cd.length>0){
+      cards=cd.map(r=>({id:r.id,icon:r.icon,title:r.title,desc:r.description,
+        category:r.category,color:r.color_index,link:r.link_url,
+        isNew:r.is_new,requiresLogin:r.requires_login||false}));
+    } else {
+      cards=JSON.parse(JSON.stringify(DEFAULT_CARDS));
+    }
+    categories=[...new Set(cards.map(c=>c.category))];
+    const {data:nd}=await csDB.from('settings').select('value').eq('key','notice').maybeSingle();
+    noticeText=nd?.value||'';
+    const {data:pid}=await csDB.from('settings').select('value').eq('key','portal_id').maybeSingle();
+    const {data:ppw}=await csDB.from('settings').select('value').eq('key','portal_pw').maybeSingle();
+    portalId=pid?.value||'';
+    portalPw=ppw?.value||'';
+    _dbOk=true;
+  }catch(e){
+    _dbOk=false;
+    console.error('Supabase 로드 실패:', e);
+    const c=localStorage.getItem('cs_cards');
+    if(c) cards=JSON.parse(c); else cards=JSON.parse(JSON.stringify(DEFAULT_CARDS));
+    categories=[...new Set(cards.map(c=>c.category))];
+  }
 }
 
 // ── RENDER ────────────────────────────────────────────────────
@@ -548,38 +616,33 @@ function saveCard(){
 
 function openPortalSettings(){
   showModal('🔑 포털 접근 계정 설정',
-    '<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:#92400E">'
-    + '🔒 카드에 "로그인 필요" 설정 시, 이 계정으로 인증합니다.'
-    + '</div>'
-    + '<div class="form-row"><label>포털 아이디</label>'
-    + '<input id="ps-id" value="' + escA(portalId) + '" placeholder="예: staff"></div>'
-    + '<div class="form-row"><label>포털 비밀번호</label>'
-    + '<input type="password" id="ps-pw" value="' + escA(portalPw) + '" placeholder="비밀번호 입력"></div>',
-    '<button id="_psCancelBtn" class="btn btn-g">취소</button>'
-    + '<button id="_psSaveBtn" class="btn btn-p">저장</button>'
+    `<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:#92400E">
+       🔒 카드에 "로그인 필요" 설정 시, 이 계정으로 인증합니다.
+     </div>
+     <div class="form-row">
+       <label>포털 아이디</label>
+       <input id="ps-id" value="${escA(portalId)}" placeholder="예: staff">
+     </div>
+     <div class="form-row">
+       <label>포털 비밀번호</label>
+       <input type="password" id="ps-pw" value="${escA(portalPw)}" placeholder="비밀번호 입력">
+     </div>`,
+    `<button class="btn btn-g" onclick="closeModal()">취소</button>
+     <button class="btn btn-p" onclick="savePortalSettings()">저장</button>`
   );
-  setTimeout(function(){
-    var cb = document.getElementById('_psCancelBtn');
-    var sb = document.getElementById('_psSaveBtn');
-    if(cb) cb.addEventListener('click', closeModal);
-    if(sb) sb.addEventListener('click', savePortalSettings);
-    var inp = document.getElementById('ps-id');
-    if(inp) inp.focus();
-  }, 50);
 }
 
-function savePortalSettings(){
-  var id = (document.getElementById('ps-id')?.value||'').trim();
-  var pw = (document.getElementById('ps-pw')?.value||'').trim();
+async function savePortalSettings(){
+  const id = (document.getElementById('ps-id')?.value||'').trim();
+  const pw = (document.getElementById('ps-pw')?.value||'').trim();
   if(!id||!pw){ toast('아이디와 비밀번호를 입력하세요','warn'); return; }
-  portalId = id;
-  portalPw = pw;
+  portalId = id; portalPw = pw;
+  if(csDB){
+    await csDB.from('settings').upsert({key:'portal_id', value:id});
+    await csDB.from('settings').upsert({key:'portal_pw', value:pw});
+  }
   closeModal();
   toast('✅ 포털 계정 저장 완료');
-  if(csDB){
-    csDB.from('settings').upsert({key:'portal_id', value:id}).catch(function(e){ console.error('DB 저장 실패:', e); });
-    csDB.from('settings').upsert({key:'portal_pw', value:pw}).catch(function(e){ console.error('DB 저장 실패:', e); });
-  }
 }
 
 function openCategoryManager(){
@@ -773,9 +836,7 @@ function renderAll(){
 }
 
 // ── INIT ──────────────────────────────────────────────────────
-load();
-renderNotice();
-renderAll();
+(async()=>{ await load(); renderNotice(); renderAll(); updateDbStatus(); })();
 </script>
 </body>
 </html>
