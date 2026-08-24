@@ -6,3 +6,9 @@ civil-service.html
 이전버전/
 .vercel
 node_modules/
+
+.vercel
+.env*
+.supabase_db_password.txt
+.supabase_admin_credential.txt
+supabase/.temp
