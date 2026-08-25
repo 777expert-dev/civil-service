@@ -160,7 +160,7 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:#F0F4F8;m
 
 <!-- CARD GRID -->
 <div class="grid-wrap">
-  <div class="card-grid" id="card-grid"></div>
+  <div class="card-grid" id="card-grid"><div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">불러오는 중...</div></div></div>
 </div>
 
 <!-- ADMIN PANEL -->
@@ -188,6 +188,7 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:#F0F4F8;m
 
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 // ── DATA ──────────────────────────────────────────────────────
 const ICONS = ['📄','📋','📝','📑','🗂️','🗃️','🏖️','🎓','💼','🏥','🏦','🔖','📬','🎯','🧾','💰','🏠','🚗','📅','✅','🔔','📊','👤','👥','🏆','📌','🔧','📞','💡','🎁','🛠️','📦','🔐','🌐','📲','🖥️'];
@@ -222,27 +223,66 @@ let categories = [];
 let adminMode = false;
 let editingId = null;
 let activeFilter = 'all';
-const ADMIN_ID = 'admin';
-const ADMIN_PW = '1234';
 let noticeText = '';
 
-function save(){
-  localStorage.setItem('cs_cards', JSON.stringify(cards));
-  localStorage.setItem('cs_notice', noticeText);
-  localStorage.setItem('cs_categories', JSON.stringify(categories));
+// ── SUPABASE ──────────────────────────────────────────────────
+// anon key is safe to embed client-side: all writes are gated by the
+// verify_portal/save_cards/save_setting RPCs, which re-check the admin
+// password on every call. See supabase/migrations/.
+const SB_URL = 'https://fcubbvuqgncpymkrpebg.supabase.co';
+const SB_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjdWJidnVxZ25jcHlta3JwZWJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MjQ1NjQsImV4cCI6MjEwMzEwMDU2NH0.zVL2BRQiZ3oFj8G41oDom7YYfhNgtKEvuWBEO79a4xE';
+const sb = window.supabase.createClient(SB_URL, SB_ANON_KEY, { db: { schema: 'civil_service' } });
+
+// admin credentials only ever live in memory for the current tab session;
+// every write RPC re-verifies them server-side, nothing is trusted client-side.
+let _adminId = null;
+let _adminPw = null;
+
+function cardToRow(c, i){
+  return {
+    id: c.id, icon: c.icon, title: c.title, description: c.desc || '',
+    category: c.category, color_index: c.color || 0, link_url: c.link || '#',
+    is_new: !!c.isNew, sort_order: i
+  };
 }
-function load(){
+function rowToCard(r){
+  return { id: r.id, icon: r.icon, title: r.title, desc: r.description, category: r.category, color: r.color_index, link: r.link_url, isNew: r.is_new };
+}
+
+async function load(){
   try{
-    const c = localStorage.getItem('cs_cards');
-    const n = localStorage.getItem('cs_notice');
-    if(c) cards = JSON.parse(c);
-    else cards = JSON.parse(JSON.stringify(DEFAULT_CARDS));
-    if(n !== null) noticeText = n;
-    else noticeText = '';
-    const cat = localStorage.getItem('cs_categories');
-    if(cat) categories = JSON.parse(cat);
-    else categories = [...new Set(JSON.parse(JSON.stringify(DEFAULT_CARDS)).map(c=>c.category))];
-  } catch(e){ cards = JSON.parse(JSON.stringify(DEFAULT_CARDS)); categories=[...new Set(DEFAULT_CARDS.map(c=>c.category))]; }
+    const [cardsRes, settingsRes] = await Promise.all([
+      sb.from('service_cards').select('*').order('sort_order', {ascending:true}),
+      sb.from('settings').select('key,value')
+    ]);
+    if(cardsRes.error) throw cardsRes.error;
+    if(settingsRes.error) throw settingsRes.error;
+    cards = (cardsRes.data||[]).map(rowToCard);
+    const s = Object.fromEntries((settingsRes.data||[]).map(r=>[r.key, r.value]));
+    noticeText = s.notice || '';
+    categories = s.categories ? JSON.parse(s.categories) : [...new Set(cards.map(c=>c.category))];
+  } catch(e){
+    console.error('Supabase 로딩 실패, 임시 기본값으로 표시합니다:', e);
+    cards = JSON.parse(JSON.stringify(DEFAULT_CARDS));
+    categories = [...new Set(DEFAULT_CARDS.map(c=>c.category))];
+    noticeText = '';
+  }
+}
+
+async function persistCards(){
+  const { data, error } = await sb.rpc('save_cards', { p_id: _adminId, p_pw: _adminPw, p_cards: cards.map(cardToRow) });
+  if(error) throw error;
+  if(data !== true) throw new Error('save_cards rejected');
+}
+async function persistCategories(){
+  const { data, error } = await sb.rpc('save_setting', { p_id: _adminId, p_pw: _adminPw, p_key: 'categories', p_value: JSON.stringify(categories) });
+  if(error) throw error;
+  if(data !== true) throw new Error('save_setting rejected');
+}
+async function persistNotice(){
+  const { data, error } = await sb.rpc('save_setting', { p_id: _adminId, p_pw: _adminPw, p_key: 'notice', p_value: noticeText });
+  if(error) throw error;
+  if(data !== true) throw new Error('save_setting rejected');
 }
 
 // ── RENDER ────────────────────────────────────────────────────
@@ -329,25 +369,31 @@ function openAdminLogin(){
      <div class="form-row">
        <label>비밀번호</label>
        <input type="password" id="pw-input" placeholder="비밀번호 입력" autocomplete="current-password" onkeydown="if(event.key==='Enter')checkPw()">
-       <div class="pw-hint">초기 아이디: admin · 초기 비밀번호: 1234</div>
+       <div class="pw-hint">관리자 계정 정보는 담당자에게 문의하세요</div>
      </div>`,
     `<button class="btn btn-g" onclick="closeModal()">취소</button>
      <button class="btn btn-p" onclick="checkPw()">로그인</button>`);
   setTimeout(()=>document.getElementById('id-input')?.focus(),100);
 }
 
-function checkPw(){
+async function checkPw(){
   const id = (document.getElementById('id-input')?.value||'').trim();
   const pw = document.getElementById('pw-input')?.value||'';
-  if(id === ADMIN_ID && pw === ADMIN_PW){
-    closeModal();
-    enterAdmin();
-  } else if(id !== ADMIN_ID){
-    toast('아이디가 올바르지 않습니다','err');
-    document.getElementById('id-input')?.select();
-  } else {
-    toast('비밀번호가 틀렸습니다','err');
-    document.getElementById('pw-input')?.select();
+  if(!id || !pw){ toast('아이디와 비밀번호를 입력하세요','warn'); return; }
+  try{
+    const { data, error } = await sb.rpc('verify_portal', { p_id: id, p_pw: pw });
+    if(error) throw error;
+    if(data === true){
+      _adminId = id; _adminPw = pw;
+      closeModal();
+      enterAdmin();
+    } else {
+      toast('아이디 또는 비밀번호가 올바르지 않습니다','err');
+      document.getElementById('pw-input')?.select();
+    }
+  } catch(e){
+    console.error(e);
+    toast('❌ 로그인 확인 중 오류가 발생했습니다','err');
   }
 }
 
@@ -361,6 +407,7 @@ function enterAdmin(){
 
 function exitAdmin(){
   adminMode = false;
+  _adminId = null; _adminPw = null;
   document.getElementById('admin-panel').classList.add('hidden');
   document.querySelector('.hdr-admin-btn').innerHTML = '🔒 관리자';
   toast('관리자 모드 종료');
@@ -460,7 +507,7 @@ function selectColor(i){
   });
 }
 
-function saveCard(){
+async function saveCard(){
   const title = (document.getElementById('f-title')?.value||'').trim();
   const desc  = (document.getElementById('f-desc')?.value||'').trim();
   const cat   = (document.getElementById('f-cat')?.value||'').trim();
@@ -469,17 +516,23 @@ function saveCard(){
   if(!title){toast('서비스명을 입력하세요','warn');return;}
   if(!cat){toast('카테고리를 입력하세요','warn');return;}
 
+  const prevCards = JSON.parse(JSON.stringify(cards));
   if(editingId){
     const c = cards.find(x=>x.id===editingId);
     if(c){ c.icon=_selIcon; c.title=title; c.desc=desc; c.category=cat; c.link=link||'#'; c.isNew=isNew; c.color=_selColor; }
-    toast('✅ 카드 수정 완료');
   } else {
     cards.push({id:'c'+Date.now(),icon:_selIcon,title,desc,category:cat,link:link||'#',isNew,color:_selColor});
-    toast('✅ 카드 추가 완료');
   }
-  save();
-  closeModal();
-  renderAll();
+  try{
+    await persistCards();
+    closeModal();
+    renderAll();
+    toast(editingId?'✅ 카드 수정 완료':'✅ 카드 추가 완료');
+  } catch(e){
+    console.error(e);
+    cards = prevCards;
+    toast('❌ 저장 실패 - 다시 시도해주세요','err');
+  }
 }
 
 // ── CATEGORY MANAGER ─────────────────────────────────────────
@@ -514,15 +567,22 @@ function _renderCategoryModal(){
   );
 }
 
-function addCategory(){
+async function addCategory(){
   const name = (document.getElementById('new-cat-input')?.value||'').trim();
   if(!name){ toast('카테고리 이름을 입력하세요','warn'); return; }
   if(getCategories().includes(name)){ toast('이미 있는 카테고리입니다','warn'); return; }
+  const prevCats = [...categories];
   categories.push(name);
-  save();
-  renderFilters();
-  toast(`✅ "${name}" 카테고리 추가`);
-  _renderCategoryModal();
+  try{
+    await persistCategories();
+    renderFilters();
+    toast(`✅ "${name}" 카테고리 추가`);
+    _renderCategoryModal();
+  } catch(e){
+    console.error(e);
+    categories = prevCats;
+    toast('❌ 저장 실패 - 다시 시도해주세요','err');
+  }
 }
 
 function openRenameCategory(oldName){
@@ -542,21 +602,29 @@ function openRenameCategory(oldName){
   setTimeout(()=>{ const el=document.getElementById('rename-cat-input'); if(el){el.focus();el.select();} },100);
 }
 
-function renameCategory(oldName){
+async function renameCategory(oldName){
   const newName = (document.getElementById('rename-cat-input')?.value||'').trim();
   if(!newName){ toast('이름을 입력하세요','warn'); return; }
   if(newName === oldName){ openCategoryManager(); return; }
   if(getCategories().filter(c=>c!==oldName).includes(newName)){ toast('이미 있는 카테고리입니다','warn'); return; }
+  const prevCats = [...categories];
+  const prevCards = JSON.parse(JSON.stringify(cards));
   // update categories array
   const idx = categories.indexOf(oldName);
   if(idx>=0) categories[idx] = newName; else categories.push(newName);
   // update all cards
   cards.forEach(c=>{ if(c.category===oldName) c.category=newName; });
   if(activeFilter===oldName) activeFilter=newName;
-  save();
-  renderAll();
-  toast(`✅ "${oldName}" → "${newName}" 변경 완료`);
-  openCategoryManager();
+  try{
+    await Promise.all([persistCategories(), persistCards()]);
+    renderAll();
+    toast(`✅ "${oldName}" → "${newName}" 변경 완료`);
+    openCategoryManager();
+  } catch(e){
+    console.error(e);
+    categories = prevCats; cards = prevCards;
+    toast('❌ 저장 실패 - 다시 시도해주세요','err');
+  }
 }
 
 function deleteCategoryPrompt(cat){
@@ -582,8 +650,10 @@ function deleteCategoryPrompt(cat){
   );
 }
 
-function deleteCategory(cat){
+async function deleteCategory(cat){
   const sel = document.getElementById('reassign-cat')?.value;
+  const prevCats = [...categories];
+  const prevCards = JSON.parse(JSON.stringify(cards));
   if(sel === '__delete__' || !sel){
     cards = cards.filter(c=>c.category!==cat);
   } else {
@@ -591,18 +661,32 @@ function deleteCategory(cat){
   }
   categories = categories.filter(c=>c!==cat);
   if(activeFilter===cat) activeFilter='all';
-  save();
-  renderAll();
-  toast(`"${cat}" 카테고리 삭제됨`);
-  openCategoryManager();
+  try{
+    await Promise.all([persistCategories(), persistCards()]);
+    renderAll();
+    toast(`"${cat}" 카테고리 삭제됨`);
+    openCategoryManager();
+  } catch(e){
+    console.error(e);
+    categories = prevCats; cards = prevCards;
+    toast('❌ 삭제 실패 - 다시 시도해주세요','err');
+  }
 }
 
-function deleteCard(id){
+async function deleteCard(id){
   if(!confirm('이 카드를 삭제할까요?'))return;
+  const prevCards = JSON.parse(JSON.stringify(cards));
   cards = cards.filter(c=>c.id!==id);
-  save();
-  renderAll();
-  toast('삭제됨');
+  try{
+    await persistCards();
+    renderAll();
+    toast('삭제됨');
+  } catch(e){
+    console.error(e);
+    cards = prevCards;
+    renderAll();
+    toast('❌ 삭제 실패 - 다시 시도해주세요','err');
+  }
 }
 
 // ── NOTICE EDIT ───────────────────────────────────────────────
@@ -616,30 +700,46 @@ function openNoticeEdit(){
      <button class="btn btn-p" onclick="saveNotice()">저장</button>`);
 }
 
-function saveNotice(){
+async function saveNotice(){
+  const prevNotice = noticeText;
   noticeText = (document.getElementById('f-notice')?.value||'').trim();
-  save();
-  renderNotice();
-  closeModal();
-  toast('✅ 공지 업데이트');
+  try{
+    await persistNotice();
+    renderNotice();
+    closeModal();
+    toast('✅ 공지 업데이트');
+  } catch(e){
+    console.error(e);
+    noticeText = prevNotice;
+    toast('❌ 저장 실패 - 다시 시도해주세요','err');
+  }
 }
 
 // ── DRAG REORDER ──────────────────────────────────────────────
 let _dragId = null;
 function dragStart(e, id){ _dragId=id; e.dataTransfer.effectAllowed='move'; }
 function dragOver(e, id){ e.preventDefault(); }
-function dragDrop(e, id){
+async function dragDrop(e, id){
   e.preventDefault();
   if(!_dragId || _dragId===id) return;
+  const prevCards = JSON.parse(JSON.stringify(cards));
   const from = cards.findIndex(c=>c.id===_dragId);
   const to   = cards.findIndex(c=>c.id===id);
   if(from<0||to<0) return;
   const [item] = cards.splice(from,1);
   cards.splice(to,0,item);
-  save();
   renderAdminList();
   renderCards();
   _dragId=null;
+  try{
+    await persistCards();
+  } catch(e){
+    console.error(e);
+    cards = prevCards;
+    renderAdminList();
+    renderCards();
+    toast('❌ 순서 저장 실패','err');
+  }
 }
 
 // ── MODAL ─────────────────────────────────────────────────────
@@ -674,9 +774,11 @@ function renderAll(){
 }
 
 // ── INIT ──────────────────────────────────────────────────────
-load();
-renderNotice();
-renderAll();
+(async function init(){
+  await load();
+  renderNotice();
+  renderAll();
+})();
 </script>
 </body>
 </html>
