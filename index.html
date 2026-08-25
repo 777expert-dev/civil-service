@@ -171,6 +171,7 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:#F0F4F8;m
       <button class="btn-add" onclick="openCardForm()">➕ 카드 추가</button>
       <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3)" onclick="openCategoryManager()">🏷️ 카테고리</button>
       <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3)" onclick="openNoticeEdit()">📢 공지 수정</button>
+      <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3)" onclick="openChangePassword()">🔑 비밀번호 변경</button>
       <button class="btn-exit" onclick="exitAdmin()">나가기</button>
     </div>
   </div>
@@ -715,6 +716,49 @@ async function saveNotice(){
   }
 }
 
+// ── CHANGE PASSWORD ───────────────────────────────────────────
+function openChangePassword(){
+  showModal('🔑 비밀번호 변경',
+    `<div class="form-row">
+       <label>현재 비밀번호</label>
+       <input type="password" id="cp-current" placeholder="현재 비밀번호" autocomplete="current-password">
+     </div>
+     <div class="form-row">
+       <label>새 비밀번호</label>
+       <input type="password" id="cp-new" placeholder="4자 이상" autocomplete="new-password">
+     </div>
+     <div class="form-row">
+       <label>새 비밀번호 확인</label>
+       <input type="password" id="cp-new2" placeholder="새 비밀번호 다시 입력" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitChangePassword()">
+     </div>`,
+    `<button class="btn btn-g" onclick="closeModal()">취소</button>
+     <button class="btn btn-p" onclick="submitChangePassword()">변경</button>`);
+  setTimeout(()=>document.getElementById('cp-current')?.focus(),100);
+}
+
+async function submitChangePassword(){
+  const cur = document.getElementById('cp-current')?.value||'';
+  const next = document.getElementById('cp-new')?.value||'';
+  const next2 = document.getElementById('cp-new2')?.value||'';
+  if(!cur){ toast('현재 비밀번호를 입력하세요','warn'); return; }
+  if(next.length<4){ toast('새 비밀번호는 4자 이상이어야 합니다','warn'); return; }
+  if(next!==next2){ toast('새 비밀번호가 일치하지 않습니다','warn'); return; }
+  try{
+    const { data, error } = await sb.rpc('save_portal', { p_id: _adminId, p_new_pw: next, p_current_pw: cur });
+    if(error) throw error;
+    if(data === true){
+      _adminPw = next;
+      closeModal();
+      toast('✅ 비밀번호가 변경되었습니다');
+    } else {
+      toast('현재 비밀번호가 올바르지 않습니다','err');
+    }
+  } catch(e){
+    console.error(e);
+    toast('❌ 변경 실패 - 다시 시도해주세요','err');
+  }
+}
+
 // ── DRAG REORDER ──────────────────────────────────────────────
 let _dragId = null;
 function dragStart(e, id){ _dragId=id; e.dataTransfer.effectAllowed='move'; }
@@ -750,7 +794,15 @@ function showModal(title, body, foot){
   document.getElementById('overlay').classList.add('show');
 }
 function closeModal(){ document.getElementById('overlay').classList.remove('show'); }
-document.getElementById('overlay').addEventListener('click',e=>{ if(e.target===document.getElementById('overlay'))closeModal(); });
+// only close on a press-and-release that both land on the backdrop itself --
+// selecting text or dragging inside the modal and releasing outside the
+// window (or on the backdrop) must NOT be treated as a "click outside".
+let _overlayPressedOnSelf = false;
+document.getElementById('overlay').addEventListener('mousedown', e=>{ _overlayPressedOnSelf = (e.target===document.getElementById('overlay')); });
+document.getElementById('overlay').addEventListener('mouseup', e=>{
+  if(_overlayPressedOnSelf && e.target===document.getElementById('overlay')) closeModal();
+  _overlayPressedOnSelf = false;
+});
 
 // ── TOAST ─────────────────────────────────────────────────────
 let _toastTimer;
